@@ -47,6 +47,11 @@ let enemyBullets = [];
 let dashCooldown = 0;
 let inShop = false;
 
+// ===== SCREEN FX =====
+let shakeTime = 0;
+let shakePower = 0;
+let hitFlash = 0;
+
 function setup() {
   createCanvas(500, 500);
   loadAccount();
@@ -159,10 +164,11 @@ function draw() {
   drawArena();
   checkFinalRealmUnlock(); // <-- FINAL LEVEL CHECK
 
-  if (keyIsDown(LEFT_ARROW)) px -= speed;
-  if (keyIsDown(RIGHT_ARROW)) px += speed;
-  if (keyIsDown(UP_ARROW)) py -= speed;
-  if (keyIsDown(DOWN_ARROW)) py += speed;
+// Arrow Keys OR WASD
+if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) px -= speed;  // A
+if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) px += speed; // D
+if (keyIsDown(UP_ARROW) || keyIsDown(87)) py -= speed;    // W
+if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) py += speed;  // S
 
   px = constrain(px, 20, width - 20);
   py = constrain(py, 20, height - 20);
@@ -183,14 +189,16 @@ function draw() {
 
     if (e.type === "mage" && frameCount % 90 === 0) shootAtPlayer(e);
 
-    if (attacking && d < 50 + weapon * 15) {
-      let hitDir = atan2(e.y - py, e.x - px);
-      if (abs(angleDiff(aim, hitDir)) < 0.6) {
-        e.hp -= weapon * 2;
-        e.x += cos(hitDir) * 14;
-        e.y += sin(hitDir) * 14;
-      }
-    }
+   if (attacking && d < 50 + weapon * 15) {
+  let hitDir = atan2(e.y - py, e.x - px);
+  if (abs(angleDiff(aim, hitDir)) < 0.6) {
+    e.hp -= weapon * 2;
+    e.flash = 6;              
+    e.x += cos(hitDir) * 14;
+    e.y += sin(hitDir) * 14;
+  }
+}
+
 
     drawEnemy(e, dir);
   }
@@ -438,7 +446,8 @@ function makeEnemy(type) {
     damage: 0.4,
     type,
     boss: false,
-    skin: random(["A", "B", "C"])
+    skin: random(["A", "B", "C"]),
+    flash: 0,
   };
 
   if (type === "brute") {
@@ -465,10 +474,20 @@ function drawEnemy(e, dir) {
   push();
   translate(e.x, e.y);
   rotate(dir);
-  if (e.boss) fill(180, 0, 0);
-  else if (e.skin === "A") fill(0, 200, 100);
-  else if (e.skin === "B") fill(0, 140, 255);
-  else fill(200, 200, 0);
+
+  if (e.flash > 0) {
+    fill(255);
+    e.flash--;
+  } else if (e.boss) {
+    fill(180, 0, 0);
+  } else if (e.skin === "A") {
+    fill(0, 200, 100);
+  } else if (e.skin === "B") {
+    fill(0, 140, 255);
+  } else {
+    fill(200, 200, 0);
+  }
+
   ellipse(0, 0, e.size);
   stroke(200);
   strokeWeight(4);
