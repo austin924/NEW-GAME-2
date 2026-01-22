@@ -53,7 +53,7 @@ let shakePower = 0;
 let hitFlash = 0;
 
 function setup() {
-  createCanvas(500, 500);
+  createCanvas(windowWidth, windowHeight);
   loadAccount();
   checkLeaderboardRefresh();
   loadLeaderboard();
@@ -518,4 +518,7 @@ function drawXP() {
 function angleDiff(a, b) {
   let d = a - b;
   return atan2(sin(d), cos(d));
+}
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
 }
