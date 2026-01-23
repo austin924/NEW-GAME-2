@@ -86,7 +86,16 @@ function keyPressed() {
 
   if (keyCode === SHIFT) dash();
   if (inShop) handleShopInput();
+  // press O to turn off invincibility manually
+if (key === "o" || key === "O") {
+  if (invincible) {
+    invincible = false;
+    console.log("Invincibility turned off!");
+  }
 }
+
+}
+
 
 // ===== MAIN LOOP =====
 function draw() {
@@ -156,10 +165,11 @@ function draw() {
 
   if (dashCooldown > 0) dashCooldown--;
 
-  if (inShop) {
-    drawShop();
-    return;
-  }
+if (inShop && !invincible) {
+  drawShop();
+  return;
+}
+
 
   drawArena();
   checkFinalRealmUnlock(); // <-- FINAL LEVEL CHECK
