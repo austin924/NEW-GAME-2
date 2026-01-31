@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Sword Game - Firebase Edition</title>
+
+  <style>
+
+    body { margin: 0; overflow: hidden; }
+
+  </style>
+
+  
+
+  <!-- Firebase SDK -->
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+  
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+
+</head>
+
+<body>
+
+  <script>
+
+    // ===== FIREBASE CONFIG =====
+
+    const firebaseConfig = {
+
+      apiKey: "AIzaSyAeMqj6oYUuGfIbhCdwyjPxypDaGznO7Qs",
+
+      authDomain: "austins-sword-game.firebaseapp.com",
+
+      databaseURL: "https://austins-sword-game-default-rtdb.firebaseio.com",
+
+      projectId: "austins-sword-game",
+
+      storageBucket: "austins-sword-game.firebasestorage.app",
+
+      messagingSenderId: "330387309420",
+
+      appId: "1:330387309420:web:8197c53a679aacd99fe949"
+
+    };
+
+
+
+    // Initialize Firebase
+
+    firebase.initializeApp(firebaseConfig);
+
+    const database = firebase.database();
+
+    const leaderboardRef = database.ref('leaderboard');
+
+
+
+    // ===== PLAYER + CORE =====
+
+    let px = 250, py = 250;
+
+    let speed = 6;
+
+    let hp = 100, maxHP = 100;
+
+    let level = 1;
+
+    let xp = 0;
+
+    let xpNext = 20;
+
+    let weapon = 1;
+
+
+
+    let enemies = [];
+
+    let wave = 1;
+
+    let attacking = false;
+
+    let gameState = "start";
+
+    let fullscreenOn = false;
+
+
+
+    // ===== PERMANENT PROGRESS =====
+
+    const ACC_KEY = "swordgame_account";
+
+    let invincible = false;
+
+
+
+    // ===== STATS =====
+
+    let kills = 0;
+
+    let finalStats = { level: 1, wave: 1, kills: 0 };
+
+    let submittedScore = false;
+
+
+
+    // ===== LEADERBOARD =====
+
+    let leaderboard = [];
+
+    let loadingLeaderboard = true;
+
+
+
+    // ===== ARENAS =====
+
+    let arenas = [
+
+      { name: "Grasslands", bg: [40, 120, 40] },
+
+      { name: "Desert", bg: [180, 140, 60] },
+
+      { name: "Ice Fields", bg: [180, 220, 255] },
+
+      { name: "Volcano", bg: [120, 20, 20] },
+
+      { name: "Void", bg: [20, 0, 40] },
+
+      { name: "Ruins", bg: [100, 100, 100] },
+
+      { name: "Forest Night", bg: [10, 40, 20] },
+
+      { name: "Crystal Cavern", bg: [120, 80, 160] },
+
+      { name: "Sky Realm", bg: [120, 180, 255] },
+
+      { name: "Final Realm", bg: [0, 0, 0] }
+
+    ];
+
+
+
+    // ===== ADD-ONS =====
+
+    let enemyBullets = [];
+
+    let dashCooldown = 0;
+
+    let inShop = false;
+
+    let particles = [];
+
+    let dashTrail = [];
+
+
+
+    function setup() {
+
+      createCanvas(windowWidth, windowHeight);
+
+      loadAccount();
+
+      loadFirebaseLeaderboard();
+
+    }
+
+
+
+    // ===== FIREBASE FUNCTIONS =====
+
+    function loadFirebaseLeaderboard() {
+
+      loadingLeaderboard = true;
+
+      
+
+      leaderboardRef
+
+        .orderByChild('score')
+
+        .limitToLast(10)
+
+        .once('value')
+
+        .then((snapshot) => {
+
+          leaderboard = [];
+
+          snapshot.forEach((child) => {
+
+            leaderboard.push(child.val());
+
+          });
+
+          leaderboard.reverse();
+
+          loadingLeaderboard = false;
+
+          console.log("✅ Leaderboard loaded:", leaderboard.length, "entries");
+
+        })
+
+        .catch((error) => {
+
+          console.error("❌ Error loading leaderboard:", error);
+
+          loadingLeaderboard = false;
+
+        });
+
+    }
+
+
+
+    function submitToFirebase(name, level, wave, kills) {
+
+      const score = wave * 10000 + level * 100 + kills;
+
+      
+
+      const newEntry = {
+
+        name: name,
+
+        level: level,
+
+        wave: wave,
+
+        kills: kills,
+
+        score: score,
+
+        timestamp: Date.now()
+
+      };
+
+
+
+      leaderboardRef.push(newEntry)
+
+        .then(() => {
+
+          console.log("✅ Score submitted successfully!");
+
+          loadFirebaseLeaderboard();
+
+        })
+
+        .catch((error) => {
+
+          console.error("❌ Error submitting score:", error);
+
+        });
+
+
+
+      cleanupLeaderboard();
+
+    }
+
+
+
+    function cleanupLeaderboard() {
+
+      leaderboardRef
+
+        .orderByChild('score')
+
+        .once('value')
+
+        .then((snapshot) => {
+
+          let entries = [];
+
+          snapshot.forEach((child) => {
+
+            entries.push({ key: child.key, score: child.val().score });
+
+          });
+
+          
+
+          entries.sort((a, b) => b.score - a.score);
+
+          if (entries.length > 100) {
+
+            for (let i = 100; i < entries.length; i++) {
+
+              leaderboardRef.child(entries[i].key).remove();
+
+            }
+
+          }
+
+        });
+
+    }
+
+
+
+    // ===== INPUT =====
+
+    function keyPressed() {
+
+      if (keyCode === 27 && gameState === "playing") gameState = "paused";
+
+      else if (keyCode === 27 && gameState === "paused") gameState = "playing";
+
+
+
+      if (gameState === "start" && key === " ") {
+
+        resetGame();
+
+        gameState = "playing";
+
+      }
+
+
+
+      if (gameState === "gameover" && (key === "r" || key === "R")) {
+
+        resetGame();
+
+        gameState = "playing";
+
+      }
+
+
+
+      if (key === "f" || key === "F") {
+
+        fullscreenOn = !fullscreenOn;
+
+        fullscreen(fullscreenOn);
+
+      }
+
+
+
+      if (key === "c" || key === "C") {
+
+        if (gameState === "playing") gameState = "controls";
+
+        else if (gameState === "controls") gameState = "playing";
+
+      }
+
+
+
+      if (keyCode === SHIFT) dash();
+
+      if (inShop) handleShopInput();
+
+      
+
+      if (key === "o" || key === "O") {
+
+        if (invincible) {
+
+          invincible = false;
+
+          console.log("Invincibility turned off!");
+
+        }
+
+      }
+
+    }
+
+
+
+    // ===== MAIN LOOP =====
+
+    function draw() {
+
+      if (gameState === "start") {
+
+        background(20);
+
+        fill(255);
+
+        textAlign(CENTER);
+
+        textSize(28);
+
+        text("SWORD GAME", width / 2, 220);
+
+        textSize(14);
+
+        text("Global Firebase Leaderboard", width / 2, 250);
+
+        if (invincible) text("ACCOUNT BONUS: INVINCIBLE UNLOCKED", width / 2, 270);
+
+        textSize(16);
+
+        text("SPACE = Start", width / 2, 300);
+
+        text("C = Controls", width / 2, 330);
+
+        return;
+
+      }
+
+
+
+      if (gameState === "controls") {
+
+        background(15);
+
+        fill(255);
+
+        textAlign(CENTER);
+
+        textSize(22);
+
+        text("CONTROLS", width / 2, 80);
+
+        textSize(14);
+
+        text("Arrow Keys / WASD - Move", width / 2, 130);
+
+        text("Mouse / Space - Attack", width / 2, 155);
+
+        text("SHIFT - Dash", width / 2, 180);
+
+        text("ESC - Pause", width / 2, 205);
+
+        text("F - Fullscreen", width / 2, 230);
+
+        text("C - Back", width / 2, 260);
+
+        return;
+
+      }
+
+
+
+      if (gameState === "paused") {
+
+        background(0, 180);
+
+        fill(255);
+
+        textAlign(CENTER);
+
+        textSize(32);
+
+        text("PAUSED", width / 2, height / 2);
+
+        textSize(16);
+
+        text("ESC to Resume", width / 2, height / 2 + 30);
+
+        return;
+
+      }
+
+
+
+      if (gameState === "gameover") {
+
+        background(0);
+
+        fill(255, 0, 0);
+
+        textAlign(CENTER);
+
+        textSize(32);
+
+        text("GAME OVER", width / 2, 60);
+
+
+
+        fill(255);
+
+        textSize(16);
+
+        text("Level: " + finalStats.level, width / 2, 105);
+
+        text("Wave: " + finalStats.wave, width / 2, 125);
+
+        text("Kills: " + finalStats.kills, width / 2, 145);
+
+
+
+        drawFirebaseLeaderboard();
+
+
+
+        textSize(14);
+
+        text("Press R to Restart", width / 2, height - 30);
+
+        return;
+
+      }
+
+
+
+      if (dashCooldown > 0) dashCooldown--;
+
+
+
+      if (inShop && !invincible) {
+
+        drawShop();
+
+        return;
+
+      }
+
+
+
+      drawArena();
+
+      checkFinalRealmUnlock();
+
+
+
+      if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) px -= speed;
+
+      if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) px += speed;
+
+      if (keyIsDown(UP_ARROW) || keyIsDown(87)) py -= speed;
+
+      if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) py += speed;
+
+
+
+      px = constrain(px, 20, width - 20);
+
+      py = constrain(py, 20, height - 20);
+
+
+
+      attacking = mouseIsPressed || keyIsDown(32);
+
+      let aim = atan2(mouseY - py, mouseX - px);
+
+
+
+      for (let i = dashTrail.length - 1; i >= 0; i--) {
+
+        let t = dashTrail[i];
+
+        fill(255, 0, 0, t.life * 5);
+
+        ellipse(t.x, t.y, 28 * (t.life / 20));
+
+        t.life--;
+
+        if (t.life <= 0) dashTrail.splice(i, 1);
+
+      }
+
+
+
+      for (let e of enemies) {
+
+        let dx = px - e.x;
+
+        let dy = py - e.y;
+
+        let d = sqrt(dx * dx + dy * dy);
+
+        let dir = atan2(dy, dx);
+
+
+
+        e.x += cos(dir) * e.speed;
+
+        e.y += sin(dir) * e.speed;
+
+
+
+        if (!invincible && d < e.size / 2 + 12) hp -= e.damage;
+
+
+
+        if (e.type === "mage" && frameCount % 90 === 0) shootAtPlayer(e);
+
+
+
+        if (attacking && d < 50 + weapon * 15) {
+
+          let hitDir = atan2(e.y - py, e.x - px);
+
+          if (abs(angleDiff(aim, hitDir)) < 0.6) {
+
+            e.hp -= weapon * 2;
+
+            e.flash = 6;
+
+            e.x += cos(hitDir) * 14;
+
+            e.y += sin(hitDir) * 14;
+
+          }
+
+        }
+
+
+
+        drawEnemy(e, dir);
+
+      }
+
+
+
+      updateEnemyBullets();
+
+
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+
+        let p = particles[i];
+
+        p.x += p.vx;
+
+        p.y += p.vy;
+
+        p.life--;
+
+        fill(p.c[0], p.c[1], p.c[2], p.life * 8);
+
+        ellipse(p.x, p.y, 6);
+
+        if (p.life <= 0) particles.splice(i, 1);
+
+      }
+
+
+
+      for (let i = enemies.length - 1; i >= 0; i--) {
+
+        if (enemies[i].hp <= 0) {
+
+          xp += enemies[i].boss ? 20 : 5;
+
+          kills++;
+
+          
+
+          for (let j = 0; j < 8; j++) {
+
+            particles.push({
+
+              x: enemies[i].x,
+
+              y: enemies[i].y,
+
+              vx: random(-3, 3),
+
+              vy: random(-3, 3),
+
+              life: 30,
+
+              c: enemies[i].boss ? [180, 0, 0] : [100, 255, 100]
+
+            });
+
+          }
+
+          
+
+          enemies.splice(i, 1);
+
+        }
+
+      }
+
+
+
+      if (xp >= xpNext) {
+
+        xp -= xpNext;
+
+        level++;
+
+        weapon++;
+
+        xpNext = floor(xpNext * 1.4);
+
+        if (level % 5 === 0) hp = maxHP;
+
+      }
+
+
+
+      if (enemies.length === 0) {
+
+        wave++;
+
+        if (wave % 5 === 0) inShop = true;
+
+        spawnWave();
+
+      }
+
+
+
+      push();
+
+      translate(px, py);
+
+      rotate(aim);
+
+      if (attacking) {
+
+        stroke(255);
+
+        strokeWeight(5);
+
+        line(10, 0, 60 + weapon * 10, 0);
+
+      }
+
+      noStroke();
+
+      fill(invincible ? 255 : 255, invincible ? 255 : 0, 0);
+
+      ellipse(0, 0, 28);
+
+      pop();
+
+
+
+      drawHP();
+
+      drawXP();
+
+      drawDashCooldown();
+
+
+
+      fill(255);
+
+      textAlign(LEFT);
+
+      textSize(14);
+
+      text("Wave: " + wave, 10, 20);
+
+      text("Level: " + level, 10, 40);
+
+      text("Kills: " + kills, 10, 60);
+
+      if (invincible) text("INVINCIBLE", 10, 80);
+
+
+
+      if (hp <= 0 && !invincible) {
+
+        finalStats = { level, wave, kills };
+
+        submitScore();
+
+        gameState = "gameover";
+
+      }
+
+    }
+
+
+
+    function checkFinalRealmUnlock() {
+
+      let index = min(floor((wave - 1) / 10), arenas.length - 1);
+
+      if (index === arenas.length - 1 && !invincible) {
+
+        invincible = true;
+
+        saveAccount();
+
+      }
+
+    }
+
+
+
+    function saveAccount() {
+
+      localStorage.setItem(ACC_KEY, JSON.stringify({ invincible }));
+
+    }
+
+
+
+    function loadAccount() {
+
+      let data = localStorage.getItem(ACC_KEY);
+
+      if (data) {
+
+        let acc = JSON.parse(data);
+
+        invincible = !!acc.invincible;
+
+      }
+
+    }
+
+
+
+    function drawFirebaseLeaderboard() {
+
+      fill(255);
+
+      textAlign(CENTER);
+
+      textSize(18);
+
+      text("GLOBAL LEADERBOARD", width / 2, 200);
+
+      
+
+      if (loadingLeaderboard) {
+
+        textSize(12);
+
+        text("Loading...", width / 2, 230);
+
+        return;
+
+      }
+
+      
+
+      textSize(12);
+
+      for (let i = 0; i < leaderboard.length; i++) {
+
+        let e = leaderboard[i];
+
+        text(
+
+          (i + 1) + ". " + e.name + " | W" + e.wave + " L" + e.level + " K" + e.kills,
+
+          width / 2,
+
+          225 + i * 18
+
+        );
+
+      }
+
+      
+
+      if (leaderboard.length === 0) {
+
+        text("No scores yet. Be the first!", width / 2, 230);
+
+      }
+
+    }
+
+
+
+    function submitScore() {
+
+      if (submittedScore) return;
+
+      submittedScore = true;
+
+
+
+      let name = prompt("Enter your name for the Global Leaderboard:");
+
+      if (!name || name.trim() === "") name = "Anonymous";
+
+      
+
+      name = name.substring(0, 20).replace(/[<>]/g, '');
+
+
+
+      submitToFirebase(name, finalStats.level, finalStats.wave, finalStats.kills);
+
+    }
+
+
+
+    function drawShop() {
+
+      background(20, 180);
+
+      fill(255);
+
+      textAlign(CENTER);
+
+      textSize(22);
+
+      text("SHOP", width / 2, 120);
+
+      textSize(14);
+
+      text("1: +20 Max HP (5 kills)", width / 2, 170);
+
+      text("2: +1 Weapon (8 kills)", width / 2, 200);
+
+      text("3: Heal Full (6 kills)", width / 2, 230);
+
+      text("Current Kills: " + kills, width / 2, 260);
+
+      text("ENTER to continue", width / 2, 290);
+
+    }
+
+
+
+    function handleShopInput() {
+
+      if (key === "1" && kills >= 5) {
+
+        maxHP += 20;
+
+        hp = maxHP;
+
+        kills -= 5;
+
+      }
+
+      if (key === "2" && kills >= 8) {
+
+        weapon++;
+
+        kills -= 8;
+
+      }
+
+      if (key === "3" && kills >= 6) {
+
+        hp = maxHP;
+
+        kills -= 6;
+
+      }
+
+      if (keyCode === ENTER) inShop = false;
+
+    }
+
+
+
+    function shootAtPlayer(e) {
+
+      let a = atan2(py - e.y, px - e.x);
+
+      enemyBullets.push({
+
+        x: e.x,
+
+        y: e.y,
+
+        dx: cos(a) * 3,
+
+        dy: sin(a) * 3,
+
+        r: 5
+
+      });
+
+    }
+
+
+
+    function updateEnemyBullets() {
+
+      for (let i = enemyBullets.length - 1; i >= 0; i--) {
+
+        let b = enemyBullets[i];
+
+        b.x += b.dx;
+
+        b.y += b.dy;
+
+        fill(255, 120, 0);
+
+        ellipse(b.x, b.y, b.r * 2);
+
+
+
+        if (!invincible && dist(px, py, b.x, b.y) < b.r + 12) {
+
+          hp -= 5;
+
+          enemyBullets.splice(i, 1);
+
+        }
+
+
+
+        if (b.x < 0 || b.y < 0 || b.x > width || b.y > height) {
+
+          enemyBullets.splice(i, 1);
+
+        }
+
+      }
+
+    }
+
+
+
+    function dash() {
+
+      if (dashCooldown > 0) return;
+
+      let dx = 0, dy = 0;
+
+      if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) dx--;
+
+      if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) dx++;
+
+      if (keyIsDown(UP_ARROW) || keyIsDown(87)) dy--;
+
+      if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) dy++;
+
+      
+
+      if (dx === 0 && dy === 0) return;
+
+      
+
+      px += dx * 60;
+
+      py += dy * 60;
+
+      dashCooldown = 60;
+
+      
+
+      dashTrail.push({ x: px, y: py, life: 20 });
+
+    }
+
+
+
+    function resetGame() {
+
+      px = 250;
+
+      py = 250;
+
+      hp = maxHP;
+
+      level = 1;
+
+      xp = 0;
+
+      xpNext = 20;
+
+      weapon = 1;
+
+      wave = 1;
+
+      kills = 0;
+
+      submittedScore = false;
+
+      inShop = false;
+
+      particles = [];
+
+      dashTrail = [];
+
+      spawnWave();
+
+    }
+
+
+
+    function spawnWave() {
+
+      enemies = [];
+
+      if (wave % 5 === 0) {
+
+        enemies.push(makeEnemy("boss"));
+
+        return;
+
+      }
+
+      for (let i = 0; i < wave + 2; i++) {
+
+        enemies.push(makeEnemy(random(["grunt", "brute", "mage"])));
+
+      }
+
+    }
+
+
+
+    function makeEnemy(type) {
+
+      let e = {
+
+        x: random(width),
+
+        y: random(height),
+
+        hp: 10 + wave * 4,
+
+        speed: 1 + wave * 0.1,
+
+        size: 26,
+
+        damage: 0.4,
+
+        type: type,
+
+        boss: false,
+
+        skin: random(["A", "B", "C"]),
+
+        flash: 0
+
+      };
+
+
+
+      if (type === "brute") {
+
+        e.hp *= 2;
+
+        e.size = 34;
+
+        e.speed *= 0.7;
+
+        e.damage = 0.8;
+
+      }
+
+      if (type === "mage") {
+
+        e.speed *= 1.3;
+
+        e.hp *= 0.8;
+
+      }
+
+      if (type === "boss") {
+
+        e.hp = 120 + wave * 12;
+
+        e.size = 56;
+
+        e.speed = 1.1;
+
+        e.damage = 1.5;
+
+        e.boss = true;
+
+      }
+
+      return e;
+
+    }
+
+
+
+    function drawEnemy(e, dir) {
+
+      push();
+
+      translate(e.x, e.y);
+
+      rotate(dir);
+
+
+
+      if (e.flash > 0) {
+
+        fill(255);
+
+        e.flash--;
+
+      } else if (e.boss) {
+
+        fill(180, 0, 0);
+
+      } else if (e.skin === "A") {
+
+        fill(0, 200, 100);
+
+      } else if (e.skin === "B") {
+
+        fill(0, 140, 255);
+
+      } else {
+
+        fill(200, 200, 0);
+
+      }
+
+
+
+      ellipse(0, 0, e.size);
+
+      stroke(200);
+
+      strokeWeight(4);
+
+      line(10, 0, e.size, 0);
+
+      noStroke();
+
+      pop();
+
+    }
+
+
+
+    function drawArena() {
+
+      let index = min(floor((wave - 1) / 10), arenas.length - 1);
+
+      let a = arenas[index];
+
+      background(a.bg[0], a.bg[1], a.bg[2]);
+
+    }
+
+
+
+    function drawHP() {
+
+      fill(60);
+
+      rect(150, 10, 200, 14);
+
+      fill(0, 255, 0);
+
+      rect(150, 10, 200 * (hp / maxHP), 14);
+
+    }
+
+
+
+    function drawXP() {
+
+      fill(60);
+
+      rect(150, 30, 200, 10);
+
+      fill(0, 150, 255);
+
+      rect(150, 30, 200 * (xp / xpNext), 10);
+
+    }
+
+
+
+    function drawDashCooldown() {
+
+      fill(60);
+
+      rect(150, 46, 200, 8);
+
+      if (dashCooldown === 0) {
+
+        fill(255, 200, 0);
+
+        rect(150, 46, 200, 8);
+
+      } else {
+
+        fill(100);
+
+        rect(150, 46, 200 * (1 - dashCooldown / 60), 8);
+
+      }
+
+    }
+
+
+
+    function angleDiff(a, b) {
+
+      let d = a - b;
+
+      return atan2(sin(d), cos(d));
+
+    }
+
+
+
+    function windowResized() {
+
+      resizeCanvas(windowWidth, windowHeight);
+
+    }
+
+  </script>
+
+</body>
+
+</html>
