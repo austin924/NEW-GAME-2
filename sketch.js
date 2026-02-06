@@ -531,3 +531,4 @@ function angleDiff(a, b) {
 }
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+
